@@ -1,0 +1,112 @@
+#! /bin/bash
+#
+# This script is used to control during bootup.
+#
+# usage: nasmount [start|stop]
+#
+# start
+# stop
+# modified by Yingding Wang, BdT 06.11.2012
+
+### BEGIN INIT INFO
+# Provides:          nasmount
+# Required-Start:    $network
+# Required-Stop:
+# Default-Start:     3 5
+# Default-Stop:      0 1 2 6
+# Short-Description: mount nas directory from nas1
+# Description: this script mount the DFS (NAS) with Kerberos User from AD during the starting up        
+### END INIT INFO
+
+# TODO: please change the mount and mounting directory information as you want.
+# this is the directory on your linux localhost, which is the entry point of your remote nas
+mountDIR=/nas1
+# this is the directory of your remote nas, which can be accessed from your linux localhost
+mountingDIR=//nas1/file-Archiv
+# AD User and AD password
+# TODO: please fill the information before you want to use it. 
+ad_user=""
+ad_password=""
+# Access User for Mounting Directory in DFS.
+# In this case, the access rights of nas is connected to microsoft AD
+user=$ad_user
+password=$ad_password
+# DFS Domin
+# TODO: please fill the information before you want to use it.
+dom=domain
+# Access Richts Setting for linux local Mount Point
+# TODO: please fill the information before you want to use it.
+uid=me
+gid=users
+# Logging prefix
+prompt=Logging:
+
+#
+# Main
+#
+case $1 in
+        start)
+	#creat mount point directory
+	if [ ! -d $mountDIR ]
+	then
+        	echo "$prompt mount point $mountDIR doesn't exist"
+		mkdir $mountDIR;
+		echo "$prompt mount point $mountDIR is created"
+	else    
+		#checking if mountDIR is amountpoint
+        	if /bin/mountpoint -q $mountDIR
+		then 
+			echo "$prompt Directory exist, it will be unmounted"
+			/bin/umount $mountDIR
+		else
+                # do nothing
+			echo "$prompt Directory not mounted"
+		fi
+	fi
+        if [ $? -gt 0 ]; then
+		echo "cached error"
+		$?=0
+        fi
+	# get kerbos granting ticket from AD, the nas user muss be a memeber of domain_xx in AD
+	echo "$prompt getting kerberos ticket with kinit"
+	echo $ad_password | kinit $ad_user;  
+	# after the ticket successfully granted, mount nas Directory to mount point /nas1
+	# use uid and gid option to specify the user id and group id for mount point access rights
+	/sbin/mount.cifs $mountingDIR $mountDIR -o user=$user,dom=$dom,password=$password,uid=$uid,gid=$gid
+        if [ $? -gt 0 ]; then
+		echo "catched error"
+		$?=0
+	fi
+        echo `date` >> /home/admin/nasmount.log
+	echo "mount successful" >> /home/admin/nasmount.log	
+	echo done.
+	;;
+        
+	stop)
+	#checking if mountDIR is a mountpoint
+        if /bin/mountpoint -q $mountDIR
+        then
+        	echo "$prompt Directory exist, it will be unmounted"
+        	/bin/umount $mountDIR
+        else
+        #do nothing
+		echo "$prompt Directory not mounted"
+        fi
+	if [ $? -gt 0 ]; then	
+		echo "cached error";
+		$?=0
+	fi
+	echo done.	
+        ;;
+
+	*)
+	## If no parameters are given, print which are availabel.
+	echo "Usage: $0 {start|stop}"
+	exit 1
+	;;	
+esac
+
+exit 
+
+
+
